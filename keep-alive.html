@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Telegram Forwarder - Keep Alive</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f5f5f5;
+            margin: 0;
+            padding: 20px;
+            color: #333;
+            line-height: 1.6;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background-color: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        h1 {
+            color: #1e88e5;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .status-box {
+            background-color: #f0f8ff;
+            border-left: 4px solid #1e88e5;
+            padding: 15px;
+            margin-bottom: 20px;
+            border-radius: 4px;
+        }
+        .log-container {
+            background-color: #f9f9f9;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            padding: 15px;
+            height: 200px;
+            overflow-y: auto;
+            font-family: monospace;
+            margin-bottom: 20px;
+        }
+        .settings {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+        button {
+            background-color: #1e88e5;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: bold;
+        }
+        button:hover {
+            background-color: #1565c0;
+        }
+        input {
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            width: 60px;
+        }
+        .status-indicator {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            display: inline-block;
+            margin-right: 8px;
+        }
+        .status-online {
+            background-color: #4caf50;
+        }
+        .status-offline {
+            background-color: #f44336;
+        }
+        footer {
+            text-align: center;
+            margin-top: 30px;
+            color: #666;
+            font-size: 0.9em;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Telegram Forwarder - Keep Alive</h1>
+        <div class="status-box">
+            <p><span class="status-indicator status-online" id="status-light"></span> <strong>Status:</strong> <span id="status-text">Initializing...</span></p>
+            <p><strong>Last Ping:</strong> <span id="last-ping">Never</span></p>
+            <p><strong>Server URL:</strong> <span id="server-url">https://telegram-forwarder-yzou.onrender.com</span></p>
+        </div>
+
+        <div class="settings">
+            <label for="interval">Ping Interval (seconds):</label>
+            <input type="number" id="interval" min="30" value="300">
+            <button id="update-interval">Update</button>
+            <button id="ping-now">Ping Now</button>
+        </div>
+
+        <h3>Ping Log:</h3>
+        <div class="log-container" id="log">
+            <div>Initializing keep-alive service...</div>
+        </div>
+
+        <footer>
+            <p>This page keeps your Telegram Forwarder service awake by sending periodic requests.</p>
+            <p>© 2025 Telegram Forwarder</p>
+        </footer>
+    </div>
+
+    <script>
+        // Configuration
+        let pingInterval = 300; // 5 minutes default
+        const serverUrl = 'https://telegram-forwarder-yzou.onrender.com';
+        let timerId = null;
+        let isOnline = true;
+
+        // DOM Elements
+        const statusText = document.getElementById('status-text');
+        const statusLight = document.getElementById('status-light');
+        const lastPingElement = document.getElementById('last-ping');
+        const serverUrlElement = document.getElementById('server-url');
+        const logElement = document.getElementById('log');
+        const intervalInput = document.getElementById('interval');
+        const updateIntervalButton = document.getElementById('update-interval');
+        const pingNowButton = document.getElementById('ping-now');
+
+        // Initialize
+        serverUrlElement.textContent = serverUrl;
+        
+        // Functions
+        function updateStatus(online, message) {
+            isOnline = online;
+            statusText.textContent = message;
+            statusLight.className = `status-indicator ${online ? 'status-online' : 'status-offline'}`;
+        }
+
+        function addLogEntry(message) {
+            const now = new Date();
+            const timestamp = now.toLocaleTimeString();
+            const logEntry = document.createElement('div');
+            logEntry.textContent = `[${timestamp}] ${message}`;
+            logElement.appendChild(logEntry);
+            logElement.scrollTop = logElement.scrollHeight;
+        }
+
+        async function pingServer() {
+            try {
+                addLogEntry(`Pinging ${serverUrl}...`);
+                const startTime = new Date();
+                
+                const response = await fetch(`${serverUrl}`, {
+                    method: 'GET',
+                    mode: 'cors',
+                    cache: 'no-cache'
+                });
+                
+                const endTime = new Date();
+                const responseTime = endTime - startTime;
+                
+                if (response.ok) {
+                    updateStatus(true, 'Online');
+                    addLogEntry(`Success! Response time: ${responseTime}ms`);
+                    lastPingElement.textContent = endTime.toLocaleString();
+                } else {
+                    updateStatus(false, `Error: HTTP ${response.status}`);
+                    addLogEntry(`Error: Received HTTP ${response.status}`);
+                }
+            } catch (error) {
+                updateStatus(false, 'Offline');
+                addLogEntry(`Failed to connect: ${error.message}`);
+            }
+        }
+
+        function startPinging() {
+            if (timerId) {
+                clearInterval(timerId);
+            }
+            
+            // Convert to milliseconds
+            const intervalMs = pingInterval * 1000;
+            
+            // Initial ping
+            pingServer();
+            
+            // Schedule regular pings
+            timerId = setInterval(pingServer, intervalMs);
+            addLogEntry(`Scheduled pings every ${pingInterval} seconds`);
+        }
+
+        // Event Listeners
+        updateIntervalButton.addEventListener('click', () => {
+            const newInterval = parseInt(intervalInput.value, 10);
+            if (newInterval && newInterval >= 30) { // Minimum 30 seconds
+                pingInterval = newInterval;
+                addLogEntry(`Updated ping interval to ${pingInterval} seconds`);
+                startPinging();
+            } else {
+                alert('Please enter a valid interval (minimum 30 seconds)');
+                intervalInput.value = pingInterval;
+            }
+        });
+
+        pingNowButton.addEventListener('click', () => {
+            pingServer();
+        });
+
+        // Start the keep-alive process
+        startPinging();
+    </script>
+</body>
+</html>
